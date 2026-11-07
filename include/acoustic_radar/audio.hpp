@@ -11,8 +11,9 @@
 
 namespace acoustic_radar {
 
-// RAII-обёртка PortAudio и источник данных кольцевого буфера.
-// start/stop вызываются управляющим потоком, readInput — единственным потоком чтения.
+// Открывает PortAudio при создании и закрывает при уничтожении (принцип RAII).
+// Передаёт входные кадры в кольцевой буфер.
+// start/stop вызываются основным потоком; readInput — только рабочим потоком.
 class AudioDevice final
 {
 public:
@@ -34,7 +35,7 @@ public:
     }
 
     // Счётчики PortAudio считают события обработчика звука; droppedInputFrames —
-    // отдельные кадры, отвергнутые нашим кольцевым буфером.
+    // число входных кадров, которые не поместились в кольцевой буфер.
     struct Statistics
     {
         uint64_t frames;
@@ -66,7 +67,8 @@ private:
     std::atomic<uint64_t> inputOverflows_{0};
     std::atomic<uint64_t> outputUnderflows_{0};
     ChirpGenerator chirp_;
-    // Ёмкость ~2,73 с при 48 кГц; в динамической памяти, чтобы не занимать большой стек.
+    // Вмещает около 2,73 с звука при 48 кГц. Размещаем в динамической памяти,
+    // чтобы большой массив не занимал стек вызвавшего потока.
     std::unique_ptr<SpscRing<InputFrame, 131072>> inputRing_;
     std::atomic<uint64_t> droppedInputFrames_{0};
 

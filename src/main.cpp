@@ -14,8 +14,8 @@
 #include <string>
 
 namespace {
-// Специализированный считыватель собственного диагностического формата, не универсальный WAV-
-// декодер: фиксированные блоки fmt/data, Float32 с младшим байтом первым, максимум 60 с.
+// Читаем прежний диагностический формат WAV: фиксированные блоки fmt/data,
+// Float32 с младшим байтом первым, максимум 60 с. Другие варианты WAV не поддерживаются.
 std::vector<float> readRecording(const char* path) {
     std::ifstream file(path, std::ios::binary);
     unsigned char header[44]{};
@@ -34,7 +34,7 @@ std::vector<float> readRecording(const char* path) {
     if (!file) throw std::runtime_error("Truncated WAV recording");
     return data;
 }
-// Пакетная обработка записи: живой поток обрабатывается отдельным ProcessingWorker.
+// Вычисляем спектры всего WAV-файла. Звук с устройства обрабатывает ProcessingWorker.
 std::vector<acoustic_radar::SpectrumFrame> process(
     std::vector<float> samples, std::optional<uint64_t> lastMarker) {
     acoustic_radar::SyncDetector detector;
@@ -139,7 +139,7 @@ int main(int argc, char** argv) {
 
         }
         if (audio) {
-            // Сначала останавливаем поток записи, затем дожидаемся потока чтения.
+            // Сначала останавливаем поступление звука, затем ждём рабочий поток.
             audio->stop();
             std::cout << "Dropped display cycles: " << worker->droppedResults() << '\n';
             worker.reset();

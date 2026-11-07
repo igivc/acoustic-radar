@@ -9,7 +9,13 @@ namespace {
 
 constexpr double pi = 3.14159265358979323846;
 
-// Интеграл мгновенной частоты f(t)=f0+(f1-f0)*t/duration.
+// Для линейного изменения частоты f(t)=f0+k*t, где k=(f1-f0)/duration,
+// фаза в радианах равна 2*pi*интеграл(f(t)dt) = 2*pi*(f0*t+k*t²/2).
+// В sin() подставляем фазу. Формула sin(2*pi*f(t)*t) неверна для этой развёртки:
+// её производная дала бы частоту f0+2*k*t вместо заданной f0+k*t.
+// t и duration измеряются в секундах, частоты — в герцах, k — в Гц/с.
+// На границе t=duration частота достигает f1; сама граница не генерируется,
+// поскольку отсчёты берутся на полуинтервале [0, duration).
 // Вычисление фазы из времени не накапливает ошибку суммирования приращений.
 double chirpPhase(
     double t,
@@ -23,7 +29,11 @@ double chirpPhase(
         (f0 * t + 0.5 * sweepRate * t * t);
 }
 
-// Окно Ханна для короткого синхромаркера.
+// Симметричное окно Ханна w(n)=0,5*(1-cos(2*pi*n/(N-1))).
+// На первом и последнем отсчётах w=0, около середины w≈1. Плавные края
+// уменьшают резкие скачки и спектральную утечку короткого маркера.
+// Деление на N-1 делает последний коэффициент окна нулевым. Если в окне
+// меньше двух отсчётов, возвращаем ноль, не выполняя деление.
 double hannWindow(
     uint64_t position,
     uint64_t count) noexcept
@@ -40,8 +50,12 @@ double hannWindow(
     );
 }
 
-// Огибающая акустического сигнала:
-// 10 мс нарастания, 10 мс спада.
+// Огибающая возбуждения состоит из трёх частей: косинусное нарастание
+// от 0 до 1 за первые 10 мс, постоянный уровень 1 и симметричный спад
+// до 0 за последние 10 мс. В отличие от окна Ханна на весь сигнал,
+// средняя часть сохраняет полную амплитуду для возбуждения резонансов.
+// Аргумент t находится внутри [0, duration); допустимая duration>=20 мс
+// гарантирована ограничениями настроек. При 20 мс плоского участка нет.
 double acousticEnvelope(double t, double duration) noexcept
 {
     constexpr double fade = 0.010;
@@ -68,19 +82,25 @@ void ChirpGenerator::setAcousticParameters(unsigned startHz, unsigned durationMs
 {
     startHz = std::clamp(startHz, MinStartHz, MaxStartHz);
     durationMs = std::clamp(durationMs, MinDurationMs, MaxDurationMs);
-    // Одна атомарная пара не допускает смешивания новой частоты со старой
-    // длительностью. Порядка memory_order_relaxed достаточно: других данных через неё не публикуем.
+    // Одна атомарная переменная не даёт прочитать новую частоту вместе со старой
+    // длительностью. Сдвиг на 32 бита упаковывает обе величины в одно слово.
+    // Порядка memory_order_relaxed достаточно: атомарность пары обеспечивается,
+    // а синхронизировать с ней другие массивы или указатели не требуется.
     requestedParameters_.store(
         (uint64_t{startHz} << 32) | durationMs, std::memory_order_relaxed);
 }
 
 StereoSample ChirpGenerator::nextSample() noexcept
 {
+    // Остаток от деления задаёт позицию в цикле; глобальный счётчик продолжает
+    // расти. Например, кадры 0 и 48000 начинают соседние секундные циклы.
     const uint64_t position =
         sampleIndex_++ % CycleSamples;
 
     // Настройки фиксируются на весь цикл. Интерфейс может менять запрос в любой
     // момент, но фаза текущего возбуждения при этом не разрывается.
+    // Одно атомарное чтение возвращает частоту и длительность из одного запроса;
+    // сохраняем их в обычных полях и используем до конца цикла.
     if (position == 0)
     {
         const auto parameters = requestedParameters_.load(std::memory_order_relaxed);
@@ -88,6 +108,8 @@ StereoSample ChirpGenerator::nextSample() noexcept
         durationMs_ = static_cast<unsigned>(parameters & 0xffffffffULL);
     }
 
+    // Фаза вычисляется по локальному времени от начала цикла. Это одновременно
+    // начало обоих сигналов: синхромаркер не добавляет задержку к возбуждению.
     const double duration = durationMs_ / 1000.0;
     // При 48 кГц в каждой миллисекунде ровно 48 отсчётов.
     const uint64_t acousticSamples = uint64_t{durationMs_} * 48;
@@ -112,6 +134,8 @@ StereoSample ChirpGenerator::nextSample() noexcept
             SyncSamples
         );
 
+        // Амплитуда * огибающая * синус фазы. Маркер не смешивается с правым
+        // выходом: каналы имеют независимые назначения и частотные диапазоны.
         result.left = static_cast<float>(
             SyncAmplitude *
             window *
@@ -131,6 +155,9 @@ StereoSample ChirpGenerator::nextSample() noexcept
 
         const double envelope = acousticEnvelope(t, duration);
 
+        // Верхняя граница следует за нижней с фиксированной шириной полосы.
+        // За пределами acousticSamples сохраняется исходный ноль результата:
+        // там микрофон регистрирует свободное затухание и фон помещения.
         result.right = static_cast<float>(
             AcousticAmplitude *
             envelope *
