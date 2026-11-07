@@ -32,6 +32,8 @@ struct Peak
     double correlation;
 };
 
+// Генерируем эталон тем же кодом, что и реальный выход: частоты,
+// длительность и окно синхромаркера не должны расходиться.
 std::vector<float> makeReference()
 {
     ChirpGenerator generator;
@@ -59,6 +61,7 @@ std::optional<Peak> findPeak(
     if (frames < MarkerSamples)
         return std::nullopt;
 
+    // Последняя допустимая позиция гарантирует полное окно корреляции.
     const size_t maximumStart = frames - MarkerSamples;
 
     first = std::min(first, maximumStart);
@@ -77,6 +80,8 @@ std::optional<Peak> findPeak(
 
     Peak best{0, -std::numeric_limits<double>::infinity()};
 
+    // Прямой перебор позиций; вычислительно дорогой участок,
+    // поэтому вызывается только в обработчике, а не в обработчике звука.
     for (size_t position = first; position <= last; ++position)
     {
         double dot = 0.0;
@@ -96,6 +101,8 @@ std::optional<Peak> findPeak(
         if (signalEnergy < 1e-12)
             continue;
 
+        // Нормировка энергиями делает оценку нечувствительной к усилению.
+        // Знак сохраняется: инвертированный маркер этот детектор не принимает.
         const double correlation =
             dot / std::sqrt(signalEnergy * referenceEnergy);
 
@@ -114,7 +121,7 @@ std::optional<Peak> findPeak(
     return best;
 }
 
-} // namespace
+} // анонимное пространство имён
 
 std::vector<SyncMarker> SyncDetector::detect(
     const float* input,
@@ -127,6 +134,8 @@ std::vector<SyncMarker> SyncDetector::detect(
 
     const auto reference = makeReference();
 
+    // Возвращается наиболее коррелированный маркер в поисковом диапазоне,
+    // он не обязательно хронологически самый ранний.
     // Первый маркер ищем на протяжении
     // одного полного периода.
     const auto first = findPeak(
@@ -183,4 +192,4 @@ std::vector<SyncMarker> SyncDetector::detect(
     return markers;
 }
 
-} // namespace acoustic_radar
+} // пространство имён acoustic_radar

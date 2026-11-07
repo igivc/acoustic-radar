@@ -2,30 +2,11 @@
 
 #include <algorithm>
 #include <stdexcept>
-#include <string>
 #include <string_view>
-#include <fstream>
-#include <limits>
 
 namespace acoustic_radar {
 
 namespace {
-
-void writeU16(std::ostream& out, uint16_t value)
-{
-    out.put(static_cast<char>(value & 0xFF));
-    out.put(static_cast<char>((value >> 8) & 0xFF));
-}
-
-void writeU32(std::ostream& out, uint32_t value)
-{
-    for (unsigned i = 0; i < 4; ++i)
-    {
-        out.put(static_cast<char>(
-            (value >> (8 * i)) & 0xFF
-        ));
-    }
-}
 
 void check(PaError error)
 {
@@ -33,6 +14,8 @@ void check(PaError error)
         throw std::runtime_error(Pa_GetErrorText(error));
 }
 
+// Выбираем физическое ALSA-устройство с нужным числом каналов,
+// а не системное устройство по умолчанию, которое может менять маршрутизацию.
 PaDeviceIndex findUR22C()
 {
     const int count = Pa_GetDeviceCount();
@@ -68,18 +51,15 @@ PaDeviceIndex findUR22C()
     );
 }
 
-} // namespace
+} // анонимное пространство имён
 
 AudioDevice::AudioDevice()
+    : inputRing_(std::make_unique<SpscRing<InputFrame, 131072>>())
 {
     check(Pa_Initialize());
 
     try
     {
-        recordingBuffer_.resize(
-            RecordingCapacity * InputChannels
-        );
-
         const PaDeviceIndex deviceIndex = findUR22C();
         const auto* device = Pa_GetDeviceInfo(deviceIndex);
 
@@ -132,6 +112,8 @@ void AudioDevice::stop()
         check(Pa_StopStream(stream_));
 }
 
+// Поток PortAudio: только копирование, генерация и публикация без блокировок.
+// FFT, корреляция, SDL и файловые операции выполняются в других потоках.
 int AudioDevice::callback(
     const void* input,
     void* output,
@@ -144,47 +126,18 @@ int AudioDevice::callback(
 
     const auto* inputSamples = static_cast<const float*>(input);
 
-    const uint64_t recorded =
-        self->recordedFrames_.load(std::memory_order_relaxed);
-
-    if (recorded < RecordingCapacity)
-    {
-        const uint64_t remaining = RecordingCapacity - recorded;
-
-        const uint64_t framesToCopy =
-            std::min<uint64_t>(frameCount, remaining);
-
-        float* destination =
-            self->recordingBuffer_.data() +
-            recorded * InputChannels;
-
-        const size_t sampleCount =
-            framesToCopy * InputChannels;
-
-        if (inputSamples)
-        {
-            std::copy_n(
-                inputSamples,
-                sampleCount,
-                destination
-            );
-        }
-        else
-        {
-            std::fill_n(
-                destination,
-                sampleCount,
-                0.0f
-            );
-        }
-
-        self->recordedFrames_.store(
-            recorded + framesToCopy,
-            std::memory_order_release
-        );
+    // Абсолютный индекс растёт даже при отказе кольца. Потребитель увидит
+    // пропуск и не склеит участки по разные стороны потерянных кадров.
+    const auto firstIndex = self->frames_.load(std::memory_order_relaxed);
+    uint64_t dropped = 0;
+    for (unsigned long i = 0; i < frameCount; ++i) {
+        InputFrame frame{firstIndex + i, {}};
+        if (inputSamples) std::copy_n(inputSamples + i * InputChannels, InputChannels, frame.samples.begin());
+        if (!self->inputRing_->push(frame)) ++dropped;
     }
+    self->droppedInputFrames_.fetch_add(dropped, std::memory_order_relaxed);
 
-    // Два выходных канала, interleaved.
+    // Два выходных канала с чередованием левого и правого отсчётов.
     auto* samples = static_cast<float*>(output);
 
     for (unsigned long i = 0; i < frameCount; ++i)
@@ -199,6 +152,7 @@ int AudioDevice::callback(
         }
     }
 
+    // Статистика не публикует буферы, поэтому порядка memory_order_relaxed достаточно.
     self->frames_.fetch_add(
         frameCount, std::memory_order_relaxed);
 
@@ -220,112 +174,6 @@ int AudioDevice::callback(
     return paContinue;
 }
 
-void AudioDevice::saveRecording(
-    const std::string& filename) const
-{
-    if (Pa_IsStreamStopped(stream_) != 1)
-    {
-        throw std::runtime_error(
-            "Audio stream must be stopped before saving"
-        );
-    }
-
-    static_assert(sizeof(float) == 4);
-
-    constexpr uint16_t channels = InputChannels;
-    constexpr uint16_t bitsPerSample = 32;
-    constexpr uint16_t format = 3; // IEEE floating point
-
-    constexpr uint32_t sampleRate =
-        static_cast<uint32_t>(SampleRate);
-
-    constexpr uint16_t blockAlign =
-        channels * sizeof(float);
-
-    constexpr uint32_t byteRate =
-        sampleRate * blockAlign;
-
-    const uint64_t frames =
-        recordedFrames_.load(std::memory_order_acquire);
-
-    const uint64_t dataBytes64 = frames * blockAlign;
-
-    if (dataBytes64 > std::numeric_limits<uint32_t>::max() - 36)
-    {
-        throw std::runtime_error("WAV recording is too large");
-    }
-
-    const uint32_t dataBytes =
-        static_cast<uint32_t>(dataBytes64);
-
-    std::ofstream out(filename, std::ios::binary);
-
-    if (!out)
-    {
-        throw std::runtime_error(
-            "Cannot open recording file: " + filename
-        );
-    }
-
-    // RIFF header
-    out.write("RIFF", 4);
-    writeU32(out, 36 + dataBytes);
-    out.write("WAVE", 4);
-
-    // Format chunk
-    out.write("fmt ", 4);
-    writeU32(out, 16);
-    writeU16(out, format);
-    writeU16(out, channels);
-    writeU32(out, sampleRate);
-    writeU32(out, byteRate);
-    writeU16(out, blockAlign);
-    writeU16(out, bitsPerSample);
-
-    // Data chunk
-    out.write("data", 4);
-    writeU32(out, dataBytes);
-
-    out.write(
-        reinterpret_cast<const char*>(recordingBuffer_.data()),
-        static_cast<std::streamsize>(dataBytes)
-    );
-
-    if (!out)
-    {
-        throw std::runtime_error(
-            "Failed to write recording: " + filename
-        );
-    }
-}
-
-uint64_t AudioDevice::recordedFrames() const noexcept
-{
-    return recordedFrames_.load(std::memory_order_acquire);
-}
-
-std::vector<SyncMarker>
-AudioDevice::findRecordedSyncMarkers() const
-{
-    if (Pa_IsStreamStopped(stream_) != 1)
-    {
-        throw std::runtime_error(
-            "Stop audio stream before sync detection"
-        );
-    }
-
-    SyncDetector detector;
-
-    const size_t frames = static_cast<size_t>(
-        recordedFrames_.load(std::memory_order_acquire)
-    );
-
-    return detector.detect(
-        recordingBuffer_.data(),
-        frames
-    );
-}
-
 AudioDevice::Statistics
 AudioDevice::statistics() const noexcept
 {
@@ -333,8 +181,9 @@ AudioDevice::statistics() const noexcept
         frames_.load(std::memory_order_relaxed),
         callbacks_.load(std::memory_order_relaxed),
         inputOverflows_.load(std::memory_order_relaxed),
-        outputUnderflows_.load(std::memory_order_relaxed)
+        outputUnderflows_.load(std::memory_order_relaxed),
+        droppedInputFrames_.load(std::memory_order_relaxed)
     };
 }
 
-} // namespace acoustic_radar
+} // пространство имён acoustic_radar

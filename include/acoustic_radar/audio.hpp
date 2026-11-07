@@ -4,14 +4,15 @@
 
 #include <atomic>
 #include <cstdint>
-#include <string>
-#include <vector>
 
 #include "acoustic_radar/chirp.hpp"
-#include "acoustic_radar/sync.hpp"
+#include "acoustic_radar/ring.hpp"
+#include <memory>
 
 namespace acoustic_radar {
 
+// RAII-обёртка PortAudio и источник данных кольцевого буфера.
+// start/stop вызываются управляющим потоком, readInput — единственным потоком чтения.
 class AudioDevice final
 {
 public:
@@ -26,13 +27,21 @@ public:
 
     void start();
     void stop();
+    bool readInput(InputFrame& frame) noexcept { return inputRing_->pop(frame); }
+    void setAcousticParameters(unsigned startHz, unsigned durationMs) noexcept
+    {
+        chirp_.setAcousticParameters(startHz, durationMs);
+    }
 
+    // Счётчики PortAudio считают события обработчика звука; droppedInputFrames —
+    // отдельные кадры, отвергнутые нашим кольцевым буфером.
     struct Statistics
     {
         uint64_t frames;
         uint64_t callbacks;
         uint64_t inputOverflows;
         uint64_t outputUnderflows;
+        uint64_t droppedInputFrames;
     };
 
     [[nodiscard]] Statistics statistics() const noexcept;
@@ -40,16 +49,6 @@ public:
     static constexpr unsigned InputChannels = 4;
     static constexpr unsigned OutputChannels = 2;
 
-    static constexpr unsigned RecordingSeconds = 5;
-
-    static constexpr uint64_t RecordingCapacity =
-        static_cast<uint64_t>(SampleRate) * RecordingSeconds;
-
-    // Сохранять только после остановки аудиопотока.
-    void saveRecording(const std::string& filename) const;
-
-    [[nodiscard]] uint64_t recordedFrames() const noexcept;
-    [[nodiscard]] std::vector<SyncMarker> findRecordedSyncMarkers() const;
 private:
     static int callback(
         const void* input,
@@ -67,12 +66,11 @@ private:
     std::atomic<uint64_t> inputOverflows_{0};
     std::atomic<uint64_t> outputUnderflows_{0};
     ChirpGenerator chirp_;
+    // Ёмкость ~2,73 с при 48 кГц; в динамической памяти, чтобы не занимать большой стек.
+    std::unique_ptr<SpscRing<InputFrame, 131072>> inputRing_;
+    std::atomic<uint64_t> droppedInputFrames_{0};
 
-    // Буфер выделяется заранее, до запуска PortAudio.
-    std::vector<float> recordingBuffer_;
 
-    // Количество записанных аудиокадров.
-    std::atomic<uint64_t> recordedFrames_{0};
 };
 
-} // namespace acoustic_rada
+} // пространство имён acoustic_radar
