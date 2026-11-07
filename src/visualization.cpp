@@ -48,19 +48,28 @@ void Spectrogram::add(const SpectrumFrame& frame) {
         for (size_t bin = 1; bin < column.decibels.size(); ++bin) {
             const float frequency = bin * ChirpGenerator::SampleRate / SpectrumAnalyzer::FFTSize;
             if (frequency < lowHz_ || frequency > lowHz_ + 1000) continue;
-            const float heat = (frequency - lowHz_) / 1000.f;
-            // Красный → оранжевый → жёлтый → белый; уровень управляет только яркостью.
+            const float frequencyPosition = (frequency - lowHz_) / 1000.f;
+            // Частота задаёт оттенок: красный → жёлтый → зелёный → голубой → синий.
+            // Четыре линейных участка соответствуют оттенкам HSV от 0° до 240°.
             const float brightness = std::clamp((column.decibels[bin] + 80.f) / 65.f, 0.f, 1.f);
             if (brightness <= 0) continue;
-            const float green = std::min(1.f, heat * 2);
-            const float blue = std::max(0.f, heat * 2 - 1);
+            const float hue = frequencyPosition * 4;
+            const float red = std::clamp(2.f - hue, 0.f, 1.f);
+            const float green = std::clamp(std::min(hue, 4.f - hue), 0.f, 1.f);
+            const float blue = std::clamp(hue - 2.f, 0.f, 1.f);
             // Уровень задаёт прозрачность, цвет — частоту. Обычное смешивание по прозрачности
             // не выбеливает нижние частоты при накоплении, как аддитивное смешивание.
-            SDL_SetRenderDrawColor(renderer_, 255,
+            SDL_SetRenderDrawColor(renderer_, Uint8(255 * red),
                 Uint8(255 * green), Uint8(255 * blue), Uint8(255 * brightness));
-            const SDL_FRect cell{
-                float(column.timeSeconds / CycleSeconds * Width) - cellWidth / 2,
-                Height * (1 - heat) - cellHeight / 2, cellWidth + .5f, cellHeight + .5f};
+            // Общие границы округляются к пикселям текстуры: соседние ячейки
+            // не перекрываются и не усиливают яркость на стыках при смешивании.
+            const float centerX = float(column.timeSeconds / CycleSeconds * Width);
+            const float centerY = Height * (1 - frequencyPosition);
+            const float left = std::round(centerX - cellWidth / 2);
+            const float right = std::round(centerX + cellWidth / 2);
+            const float top = std::round(centerY - cellHeight / 2);
+            const float bottom = std::round(centerY + cellHeight / 2);
+            const SDL_FRect cell{left, top, right - left, bottom - top};
             check(SDL_RenderFillRect(renderer_, &cell));
         }
     }
