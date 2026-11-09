@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Где начинается кадр? · Acoustic Radar</title>
+  <link rel="stylesheet" href="chirp-demo.css">
+  <script defer src="chirp-dsp.js"></script>
+  <script defer src="chirp-demo.js"></script>
+<link rel="stylesheet" href="teaching.css"></head>
+<body>
+  <main>
+    <header class="masthead">
+      <a class="wordmark" href="chirp-demo.html"><span class="brand-mark" aria-hidden="true">◉</span> ACOUSTIC RADAR <span class="slash">/</span> <span class="muted">SIGNAL LAB</span></a>
+      <div class="header-actions"><a class="demo-link" href="microphone-demo.html">INPUT 2 ↗</a><a class="demo-link" href="excitation-demo.html">OUTPUT 2 ↗</a><span class="offline"><i></i> Модель · без оборудования</span><button id="fullscreen" class="quiet">На весь экран ↗</button></div>
+    </header><nav class="demo-directory" aria-label="Демонстрации доклада"><a href="resonance-demo.html">Резонанс</a><a href="excitation-demo.html">Возбуждение</a><a href="chirp-demo.html" aria-current="page">Синхронизация</a><a href="microphone-demo.html">INPUT 2 и FFT</a><a href="microphone-demo.html#fft-comparison">Длина окна FFT</a><a href="pipeline-demo.html">Буферы и потоки</a></nav>
+    <section class="intro">
+      <div><p class="eyebrow">ОТ ЗВУКА К ИНДЕКСУ · ИНТЕРАКТИВНАЯ ДЕМОНСТРАЦИЯ</p>
+      <h1>Где начинается <span>кадр?</span></h1>
+      <p class="lede">Отправляем chirp в электрическую петлю. Находим его на INPUT 1.<br>От найденной позиции отсчитываем <strong>t = 0</strong> для анализа микрофона.</p></div>
+      <div class="route" aria-label="Электрическая петля синхронизации"><span>OUTPUT 1</span><span class="wire" aria-hidden="true">─────→</span><span>INPUT 1</span><small>Левый канал · синхронизация</small></div>
+    </section>
+
+    <div class="lab">
+      <aside class="controls" aria-label="Параметры модели">
+        <div class="panel-heading"><span class="eyebrow">ПУЛЬТ ЭКСПЕРИМЕНТА</span><button id="reset" class="text-button">Сбросить ↺</button></div>
+        <fieldset><legend><span class="number">01</span> Синхромаркер</legend>
+          <label for="f0">Начальная частота <output id="f0-value" for="f0"></output></label><input id="f0" type="range" min="4000" max="10000" step="500" value="8000">
+          <label for="f1">Конечная частота <output id="f1-value" for="f1"></output></label><input id="f1" type="range" min="10000" max="18000" step="500" value="12000">
+          <label for="duration">Длительность <output id="duration-value" for="duration"></output></label><input id="duration" type="range" min="4" max="20" step="1" value="10">
+          <p class="hint">В проекте: 8 → 12 кГц за 10 мс. Для сравнения частоты можно сделать одинаковыми.</p>
+        </fieldset>
+        <fieldset><legend><span class="number">02</span> Входной канал</legend>
+          <label for="delay">Задержка петли <output id="delay-value" for="delay"></output></label><input id="delay" type="range" min="0" max="60" step="0.0208333333333333" value="26.1041666666667">
+          <label for="gain">Усиление <output id="gain-value" for="gain"></output></label><input id="gain" type="range" min="0" max="1.5" step="0.05" value="0.5">
+          <label for="noise">Уровень шума (RMS) <output id="noise-value" for="noise"></output></label><input id="noise" type="range" min="0" max="0.06" step="0.001" value="0.011">
+          <label class="checkbox"><input id="marker" type="checkbox" checked> Добавить маркер во вход</label>
+          <button id="new-noise" class="secondary compact">Новый шум ↻</button>
+        </fieldset>
+        <fieldset><legend><span class="number">03</span> Решение детектора</legend>
+          <label for="threshold">Порог корреляции <output id="threshold-value" for="threshold"></output></label><input id="threshold" type="range" min="0.1" max="0.99" step="0.01" value="0.75">
+          <p class="hint">Оценка показывает сходство с эталоном. Лучшее совпадение принимается, если оценка не ниже порога.</p>
+        </fieldset>
+      </aside>
+
+      <section class="workspace" aria-label="Сигналы и корреляция">
+        <article class="scope">
+          <div class="scope-title"><h2><span class="number">01</span> Создаём chirp</h2><span class="tag teal">OUTPUT 1 · ЭТАЛОН</span></div>
+          <div class="chart-grid"><div><canvas id="reference" role="img" aria-label="Осциллограмма chirp и окно Ханна"></canvas><div class="chart-legend"><span class="key teal-key">Сигнал</span><span class="key dotted">Окно Ханна × 0,1</span></div></div>
+          <div class="ramp"><canvas id="frequency" role="img" aria-label="Линейный рост частоты chirp"></canvas><p>Частота растёт линейно.<br>Частота задаёт скорость изменения фазы.</p></div></div>
+        </article>
+        <article class="scope">
+          <div class="scope-title"><h2><span class="number">02</span> Принимаем сигнал</h2><span class="tag">INPUT 1 · ФРАГМЕНТ 80 мс</span></div>
+          <canvas id="received" role="img" aria-label="Сигнал на INPUT 1 с задержкой, шумом и окном поиска"></canvas>
+          <div class="chart-legend"><span class="key grey-key">Вход x[n]</span><span class="key amber-key">Эталон в позиции k</span><span class="legend-note">Сдвиг k измеряется в отсчётах</span></div>
+        </article>
+        <article class="scope correlation-scope">
+          <div class="scope-title"><h2><span class="number">03</span> Ищем совпадение</h2><span class="tag purple">НОРМИРОВАННАЯ КОРРЕЛЯЦИЯ</span></div>
+          <canvas id="correlation" role="img" tabindex="0" aria-label="Корреляция для всех сдвигов; нажмите, чтобы выбрать позицию. Стрелки перемещают курсор."></canvas>
+          <div class="scan-row"><button id="scan" class="primary" aria-pressed="false">▶ Показать поиск</button><button id="peak" class="secondary">К максимуму ↗</button><div class="probe-readout">k = <output id="probe-value"></output><span>r[k] = <output id="probe-score"></output></span></div></div>
+          <label class="sr-only" for="probe">Положение эталона в отсчётах</label><input id="probe" type="range" min="0" max="3360" step="1" value="0">
+          <p class="hint">Выберите позицию щелчком или ползунком. Анимация показывает готовые оценки медленнее, чем они вычисляются.</p>
+        </article>
+      </section>
+    </div>
+
+    <section class="result-panel" aria-labelledby="result-title">
+      <div class="result-heading"><div><p class="eyebrow">ОТ КОРРЕЛЯЦИИ К СПЕКТРАЛЬНОМУ КАДРУ</p><h2 id="result-title">Начало найдено</h2></div><span id="decision" class="decision" role="status" aria-live="polite"></span></div>
+      <div class="metrics"><div><span>Лучший сдвиг</span><strong id="best-index"></strong></div><div><span>Сходство r<sub>max</sub></span><strong id="best-score"></strong></div><div><span>Время маркера</span><strong id="best-time"></strong></div><div><span>Ошибка поиска</span><strong id="error"></strong></div></div>
+      <div id="frame-timeline" class="frame-timeline"><div class="frame-start">t = 0</div><div class="excitation">OUTPUT 2 · возбуждение<br><b>250 мс</b></div><div class="decay">INPUT 2 · звук и затухание</div><div class="frame-end">1000 мс</div><div class="fft-window"><span>FFT 4096</span><i></i><small>центр: +42,67 мс</small></div></div>
+      <p id="frame-description" class="frame-description"></p>
+      <div class="frame-math"><code id="absolute-formula"></code><label for="base">Начало буфера в потоке: <input id="base" type="number" min="0" max="1000000000" step="1" value="100000"> кадров</label></div>
+      <p class="hint">На графиках — 80 мс входа INPUT 1. Шкала на 1 с показывает, где будет спектральный кадр. Для его анализа программа ждёт 48 000 аудиокадров после маркера. Сигнал INPUT 2 здесь не вычисляется.</p>
+    </section>
+
+    <section class="explanation">
+      <div><p class="eyebrow">ПОЧЕМУ ЭТО РАБОТАЕТ</p><h2>Ищем форму,<br> а не громкость.</h2><p>Если без шума изменить только усиление, оценка сходства почти не изменится: амплитуда сокращается при делении. При неизменном шуме ослабление сигнала снижает оценку.</p></div>
+      <div class="formula-card"><div class="formula"><span>r[k] = </span><span class="fraction"><span>Σ x[k + j] · s[j]</span><span>√(Σ x[k + j]² · Σ s[j]²)</span></span></div><p>Суммы по j = 0 … M − 1. Выбираем максимум r[k], затем сравниваем с порогом. Среднее не вычитаем — как в <code>sync.cpp</code>.</p><details><summary>Формулы генерации и координат</summary><div class="code-formulas"><code>f(t) = f₀ + (f₁ − f₀) · t / T</code><code>φ(t) = 2π · (f₀ · t + (f₁ − f₀) · t² / (2T))</code><code>s[j] = 0,1 · Hann[j] · sin(φ(j / 48000))</code><code>Hann[j] = ½ · (1 − cos(2πj / (M − 1)))</code><code>marker = base + k; t<sub>FFT</sub> = (offset + 4096 / 2) / 48000</code></div></details></div>
+    </section>
+    <footer><span>48 000 Гц <b>·</b> Float32 <b>·</b> Период проекта 1000 мс</span><span>Без звука и доступа к микрофону <b>·</b> Space — поиск</span></footer>
+  </main>
+</body>
+</html>

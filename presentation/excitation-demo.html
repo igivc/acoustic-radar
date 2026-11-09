@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark">
+  <title>Как возбудить бокал? · Acoustic Radar</title>
+  <link rel="stylesheet" href="chirp-demo.css"><link rel="stylesheet" href="excitation-demo.css">
+  <script defer src="excitation-dsp.js"></script><script defer src="excitation-demo.js"></script>
+<link rel="stylesheet" href="teaching.css"></head>
+<body>
+<main>
+  <header class="masthead"><a class="wordmark" href="excitation-demo.html"><span class="brand-mark" aria-hidden="true">◉</span> ACOUSTIC RADAR <span class="slash">/</span> <span class="muted">SIGNAL LAB</span></a><div class="header-actions"><a class="demo-link" href="microphone-demo.html">INPUT 2 ↗</a><a class="demo-link" href="chirp-demo.html">INPUT 1 ↗</a><button id="fullscreen" class="quiet">На весь экран ↗</button></div></header><nav class="demo-directory" aria-label="Демонстрации доклада"><a href="resonance-demo.html">Резонанс</a><a href="excitation-demo.html" aria-current="page">Возбуждение</a><a href="chirp-demo.html">Синхронизация</a><a href="microphone-demo.html">INPUT 2 и FFT</a><a href="microphone-demo.html#fft-comparison">Длина окна FFT</a><a href="pipeline-demo.html">Буферы и потоки</a></nav>
+  <section class="intro"><div><p class="eyebrow">ОТ ФОРМУЛЫ К ЗВУКОВОЙ ВОЛНЕ · ИНТЕРАКТИВ 02</p><h1>Как возбудить <span>бокал?</span></h1><p class="lede">Плавно повышаем частоту, сглаживаем края, затем даём бокалу затихнуть.<br>Чтобы получить отсчёт, перемножаем <strong>амплитуду, огибающую и синус фазы</strong>.</p></div><div class="route"><span>OUTPUT 2</span><span class="wire" aria-hidden="true">─────→</span><span>ДИНАМИК</span><small>Правый канал · акустическое возбуждение</small></div></section>
+  <div class="lab excitation-lab">
+    <aside class="controls" aria-label="Параметры возбуждения">
+      <div class="panel-heading"><span class="eyebrow">ГЕНЕРАТОР ВОЗБУЖДЕНИЯ</span><button id="reset" class="text-button">Сбросить ↺</button></div>
+      <fieldset><legend><span class="number">01</span> Частота и длительность</legend>
+        <label for="start">Нижняя частота <output id="start-value" for="start"></output></label><input id="start" type="range" min="100" max="19000" step="100" value="1900">
+        <p class="hint">Верхняя граница: <strong id="end-frequency"></strong>. Ширина полосы всегда 1000 Гц — как в приложении.</p>
+        <label for="duration">Длительность <output id="duration-value" for="duration"></output></label><input id="duration" type="range" min="20" max="590" step="10" value="250">
+        <label for="amplitude">Амплитуда A <output id="amplitude-value" for="amplitude"></output></label><input id="amplitude" type="range" min="0" max="1" step="0.05" value="0.5">
+        <p class="hint">В C++ амплитуда фиксирована: 0,5. Здесь её можно менять для объяснения формулы.</p>
+      </fieldset>
+      <fieldset><legend><span class="number">02</span> Огибающая</legend>
+        <label class="checkbox"><input id="smooth" type="checkbox" checked> Сглаживать края по 10 мс</label>
+        <div class="envelope-parts"><span>Нарастание <b>10 мс</b></span><span>Полный уровень <b id="plateau-value"></b></span><span>Спад <b>10 мс</b></span></div>
+        <p id="envelope-hint" class="hint"></p>
+      </fieldset>
+      <fieldset><legend><span class="number">03</span> Темп показа</legend>
+        <label for="speed">Скорость анимации</label><select id="speed"><option value="0.05">×0,05 · цикл за 20 с</option><option value="0.25" selected>×0,25 · цикл за 4 с</option><option value="1">×1 · цикл за 1 с</option></select>
+        <label class="checkbox"><input id="loop" type="checkbox" checked> Повторять секундный цикл</label>
+        <p class="hint">Анимация не включает звук. Изменение параметров останавливает показ и начинает новый цикл.</p>
+      </fieldset>
+    </aside>
+    <section class="workspace" aria-label="Графики возбуждающего сигнала">
+      <article class="scope"><div class="scope-title"><h2><span class="number">01</span> Возбуждение и пауза</h2><span class="tag teal">ОДИН ЦИКЛ · 1000 мс</span></div><canvas id="cycle" role="img" aria-label="Секундный цикл: возбуждение с огибающей и нулевая пауза"></canvas><div class="chart-legend"><span class="key teal-key">Выходной сигнал</span><span class="key dotted">±A · огибающая</span><span class="legend-note">Обзор: размах отсчётов в каждом пикселе</span></div><div class="cycle-strip"><div id="excitation-segment">Возбуждение · <b id="excitation-label"></b></div><div id="silence-segment">Пауза · <b id="silence-label"></b></div></div></article>
+      <article class="scope"><div class="scope-title"><h2><span class="number">02</span> Частота растёт, фаза накапливается</h2><span class="tag purple">f(t) → φ(t) → sin(φ)</span></div><div class="phase-grid"><div><canvas id="frequency" role="img" aria-label="Линейная частота только во время возбуждения"></canvas><p class="hint">В паузе выход равен нулю; частота сигнала не определена.</p></div><div class="phase-view"><canvas id="phase" role="img" aria-label="Текущая фаза на единичной окружности и значение синуса"></canvas><p id="phase-caption" class="hint"></p></div></div></article>
+      <article class="scope zoom-scope"><div class="scope-title"><h2><span class="number">03</span> Увеличенный участок волны</h2><label class="zoom-label" for="zoom">Окно <select id="zoom"><option value="2">2 мс</option><option value="4" selected>4 мс</option><option value="8">8 мс</option></select></label></div><canvas id="detail" role="img" tabindex="0" aria-label="Точная форма волны с текущим отсчётом. Стрелки переключают отсчёты."></canvas><div class="chart-legend"><span class="key teal-key">A · e(t) · sin(φ(t))</span><span class="key dotted">±A · e(t)</span><span class="key amber-key">Текущий отсчёт</span></div><div class="scan-row"><button id="play" class="primary" aria-pressed="false">▶ Запустить цикл</button><button id="previous" class="secondary" aria-label="Предыдущий отсчёт">−1</button><button id="next" class="secondary" aria-label="Следующий отсчёт">+1 отсчёт</button><div class="probe-readout">n = <output id="sample-index"></output></div></div><label class="sr-only" for="position">Текущий отсчёт цикла</label><input id="position" type="range" min="0" max="47999" step="1" value="0"><div class="jump-buttons" aria-label="Перейти к участку цикла"><button data-jump="attack">Нарастание</button><button data-jump="middle">Середина chirp</button><button data-jump="release">Спад</button><button data-jump="silence">Пауза</button></div></article>
+    </section>
+  </div>
+  <section class="result-panel" aria-labelledby="state-title"><div class="result-heading"><div><p class="eyebrow">ЧТО ВЕРНЁТ nextSample() В ЭТОТ МОМЕНТ</p><h2 id="state-title">Начало нарастания</h2></div><span id="state" class="decision" role="status" aria-live="polite"></span></div><div class="metrics"><div><span>Время от начала цикла</span><strong id="current-time"></strong></div><div><span>Мгновенная частота</span><strong id="current-frequency"></strong></div><div><span>Огибающая e(t)</span><strong id="current-envelope"></strong></div><div><span>Отсчёт OUTPUT 2</span><strong id="current-sample"></strong></div></div><div class="sample-equation"><span id="sample-formula"></span><span id="phase-value"></span></div><p class="hint">Все числа относятся к одному отсчёту n. Шаг на один отсчёт — это 20,83 мкс при 48 кГц. Из 48 000 кадров цикла: <span id="active-frames"></span>.</p></section>
+  <section class="explanation"><div><p class="eyebrow">ЧТО ОТЛИЧАЕТ ЕГО ОТ СИНХРОМАРКЕРА</p><h2>Возбуждаем.<br> Потом слушаем.</h2><p>OUTPUT 1 посылает короткий маркер в электрическую петлю. OUTPUT 2 одновременно начинает более длинный акустический chirp. После его окончания микрофон INPUT 2 продолжает принимать послезвучие.</p><a class="demo-link" href="chirp-demo.html">Как INPUT 1 находит начало кадра →</a></div><div class="formula-card"><div class="excitation-formula">s(t) = A · e(t) · sin(φ(t))</div><p>Частота задаёт скорость изменения фазы. Огибающая плавно включает и выключает сигнал. Амплитуда задаёт его общий уровень.</p><details open><summary>Формулы как в chirp.cpp</summary><div class="code-formulas"><code>t = n / 48000; T = durationMs / 1000</code><code>f(t) = f₀ + 1000 · t / T</code><code>φ(t) = 2π · (f₀ · t + ½ · 1000 · t² / T)</code><code>0 ≤ t &lt; 0,01: e(t) = ½ · (1 − cos(πt / 0,01))</code><code>0,01 ≤ t ≤ T − 0,01: e(t) = 1</code><code>T − 0,01 &lt; t &lt; T: e(t) = ½ · (1 − cos(π(T − t) / 0,01))</code><code>T ≤ t &lt; 1: s(t) = 0</code></div></details><p>Здесь сглажены только первые и последние 10 мс, а середина звучит на полном уровне. У синхромаркера окно Ханна меняет амплитуду на всей длительности сигнала.</p></div></section>
+  <footer><span>48 000 Гц <b>·</b> Float32 <b>·</b> Учебная модель OUTPUT 2</span><span>Без звука и доступа к микрофону <b>·</b> Space — запуск / пауза</span></footer>
+</main>
+</body>
+</html>
