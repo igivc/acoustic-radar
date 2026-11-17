@@ -1,3 +1,7 @@
+/**
+ * @file main.cpp
+ * @brief Запуск непрерывного режима или просмотра WAV и цикл интерфейса.
+ */
 #include "acoustic_radar/audio.hpp"
 #include "acoustic_radar/spectrum.hpp"
 #include "acoustic_radar/visualization.hpp"
@@ -14,8 +18,16 @@
 #include <string>
 
 namespace {
-// Читаем прежний диагностический формат WAV: фиксированные блоки fmt/data,
-// Float32 с младшим байтом первым, максимум 60 с. Другие варианты WAV не поддерживаются.
+/**
+ * @brief Читаем прежний диагностический формат WAV: фиксированные блоки fmt/data, Float32 с младшим
+ * байтом первым, максимум 60 с.
+ *
+ * Другие варианты WAV не поддерживаются.
+ *
+ * @param path Путь к прежнему диагностическому WAV.
+ * @return Четырёхканальные Float32-отсчёты с чередованием каналов.
+ * @throws std::runtime_error Неподдерживаемый формат или неполные данные.
+ */
 std::vector<float> readRecording(const char* path) {
     std::ifstream file(path, std::ios::binary);
     unsigned char header[44]{};
@@ -34,7 +46,15 @@ std::vector<float> readRecording(const char* path) {
     if (!file) throw std::runtime_error("Truncated WAV recording");
     return data;
 }
-// Вычисляем спектры всего WAV-файла. Звук с устройства обрабатывает ProcessingWorker.
+/**
+ * @brief Вычисляем спектры всего WAV-файла.
+ *
+ * Звук с устройства обрабатывает ProcessingWorker.
+ *
+ * @param samples Четырёхканальные отсчёты WAV с частотой 48 кГц.
+ * @param lastMarker Последний уже обработанный индекс маркера, если он есть.
+ * @return Спектральные кадры полных циклов после lastMarker.
+ */
 std::vector<acoustic_radar::SpectrumFrame> process(
     std::vector<float> samples, std::optional<uint64_t> lastMarker) {
     acoustic_radar::SyncDetector detector;
@@ -49,6 +69,13 @@ std::vector<acoustic_radar::SpectrumFrame> process(
     return result;
 }
 }
+/**
+ * @brief Запускает аудиоэксперимент или просмотр диагностической записи.
+ *
+ * @param argc Число аргументов командной строки.
+ * @param argv Без аргументов включается live; --replay FILE.wav включает просмотр записи.
+ * @return 0 при штатном завершении; 1 при ошибке.
+ */
 int main(int argc, char** argv) {
     using Clock = std::chrono::steady_clock;
     using namespace std::chrono_literals;
@@ -97,6 +124,8 @@ int main(int argc, char** argv) {
         auto nextAnalysis = Clock::now();
         auto nextDraw = Clock::now();
         bool running = true;
+        // Храним запрошенный режим: оконная система может применить его не сразу.
+        bool fullscreen = false;
         while (running) {
             SDL_Event event;
             while (SDL_PollEvent(&event)) {
@@ -104,6 +133,15 @@ int main(int argc, char** argv) {
                 if (event.type != SDL_EVENT_KEY_DOWN) continue;
                 switch (event.key.key) {
                 case SDLK_ESCAPE: running = false; break;
+                case SDLK_F11:
+                    // Удержание клавиши не должно многократно переключать режим.
+                    if (!event.key.repeat) {
+                        if (SDL_SetWindowFullscreen(window, !fullscreen))
+                            fullscreen = !fullscreen;
+                        else
+                            std::cerr << "Cannot switch fullscreen: " << SDL_GetError() << '\n';
+                    }
+                    continue;
                 case SDLK_UP: startHz += 100; break;
                 case SDLK_DOWN: startHz -= 100; break;
                 case SDLK_LEFT: if (!replay) durationMs -= 10; break;

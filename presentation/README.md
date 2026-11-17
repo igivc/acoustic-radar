@@ -2,6 +2,8 @@
 
 Оглавление всех опытов — [index.html](index.html).
 
+[Схема взаимодействия классов](diagrams/class-pipeline.svg) · [исходник Mermaid](diagrams/class-pipeline.mmd) · [пояснения к схеме](diagrams/README.md).
+
 | Страница | Что показывает |
 | --- | --- |
 | [Синхронизация INPUT 1](chirp-demo.html) | Синхромаркер, вход с задержкой и шумом, корреляционный поиск начала кадра |

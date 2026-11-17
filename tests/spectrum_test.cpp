@@ -1,3 +1,7 @@
+/**
+ * @file spectrum_test.cpp
+ * @brief Проверки спектра, временных координат и синхронизации на известных сигналах.
+ */
 #include "acoustic_radar/spectrum.hpp"
 #include "acoustic_radar/chirp.hpp"
 #include "acoustic_radar/sync.hpp"
@@ -5,12 +9,24 @@
 #include <iostream>
 #include <stdexcept>
 #include <algorithm>
-// Проверки остаются активными и в Release, в отличие от assert с NDEBUG.
-// Исключение делает код завершения ненулевым, а CTest сообщает причину сбоя.
+/**
+ * @brief Проверки остаются активными и в Release, в отличие от assert с NDEBUG.
+ *
+ * Исключение делает код завершения ненулевым, а CTest сообщает причину сбоя.
+ *
+ * @param value Проверяемое условие.
+ * @param reason Сообщение об ошибке.
+ * @throws std::runtime_error Условие value не выполнено.
+ */
 void require(bool value, const char* reason) { if (!value) throw std::runtime_error(reason); }
-// Проверка DSP на известных синтетических данных без аудиоустройства и SDL.
-// Генератор создаёт эталон синхронизации, но тестовый синус вычисляется отдельно:
-// его ожидаемые частота и амплитуда известны до вызова анализатора.
+/**
+ * @brief Проверка DSP на известных синтетических данных без аудиоустройства и SDL.
+ *
+ * Генератор создаёт эталон синхронизации, но тестовый синус вычисляется отдельно:
+ * его ожидаемые частота и амплитуда известны до вызова анализатора.
+ *
+ * @return 0 при успешном завершении всех проверок.
+ */
 int main() {
     using namespace acoustic_radar;
     SpectrumAnalyzer analyzer;

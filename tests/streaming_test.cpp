@@ -1,12 +1,29 @@
+/**
+ * @file streaming_test.cpp
+ * @brief Проверки кольца, непрерывной обработки и восстановления после пропусков.
+ */
 #include "acoustic_radar/processing.hpp"
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
 #include <thread>
 using namespace acoustic_radar;
-// Проверки не отключаются в Release. Тесту не нужно реальное звуковое устройство:
-// аудиокадры создаются непосредственно здесь и передаются в CycleProcessor.
+/**
+ * @brief Проверки не отключаются в Release.
+ *
+ * Тесту не нужно реальное звуковое устройство:
+ * аудиокадры создаются непосредственно здесь и передаются в CycleProcessor.
+ *
+ * @param ok Проверяемое условие.
+ * @param message Сообщение об ошибке.
+ * @throws std::runtime_error Условие ok не выполнено.
+ */
 void require(bool ok, const char* message) { if(!ok) throw std::runtime_error(message); }
+/**
+ * @brief Проверяет FIFO кольца, длительный поток и восстановление после разрыва.
+ *
+ * @return 0 при успешном завершении всех проверок.
+ */
 int main() {
     // Небольшая ёмкость 31 не является степенью двойки: обычный переход индекса
     // к началу массива должен работать через %, без предположения о битовой маске.

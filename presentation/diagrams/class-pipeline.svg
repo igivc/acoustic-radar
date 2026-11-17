@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="title desc">
+<title id="title">Взаимодействие классов Acoustic Radar</title>
+<desc id="desc">Оборудование слева, callback PortAudio в центре сверху, интерфейс справа, обработка внизу. INPUT 1 задаёт начало цикла; FFT анализирует INPUT 2. SVG соответствует структуре class-pipeline.mmd; позиции элементов заданы для слайда 16:9.</desc>
+<defs>
+ <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#39364F"/></marker>
+ <filter id="shadow" x="-10%" y="-10%" width="125%" height="135%"><feDropShadow dx="3" dy="4" stdDeviation="0" flood-color="#28253D" flood-opacity="0.09"/></filter>
+</defs>
+<style>
+ text {font-family:Arial,'DejaVu Sans',sans-serif;fill:#28253D}
+ .heading {font-size:23px;font-weight:600}
+ .name {font-size:23px;font-weight:600}
+ .body {font-size:20px}
+ .small {font-size:17px;fill:#575368}
+ .edge {stroke:#39364F;stroke-width:2.3;fill:none;stroke-linejoin:round;marker-end:url(#arrow)}
+ .edge-label {font-size:17px;paint-order:stroke;stroke:#FFFFFF;stroke-width:7;stroke-linejoin:round;fill:#39364F}
+ .control {stroke-dasharray:6 6}
+</style>
+<rect width="1920" height="1080" fill="#FFFFFF"/>
+
+<text x="40" y="54" class="heading" text-anchor="start">Acoustic Radar · взаимодействие классов</text>
+<text x="40" y="88" class="small" text-anchor="start">Непрерывный режим · OUTPUT 1 → INPUT 1 задаёт начало спектрального кадра</text>
+<rect x="32" y="150" width="300" height="580" rx="5" fill="#FDF4FF" stroke="#E879F9" stroke-width="1.8"/>
+<text x="182.0" y="185" class="heading" text-anchor="middle">Оборудование</text>
+<rect x="380" y="150" width="650" height="380" rx="5" fill="#F0FDFA" stroke="#2DD4BF" stroke-width="1.8"/>
+<text x="705.0" y="185" class="heading" text-anchor="middle">Аудиопоток · PortAudio</text>
+<rect x="1210" y="150" width="670" height="320" rx="5" fill="#F0F9FF" stroke="#38BDF8" stroke-width="1.8"/>
+<text x="1545.0" y="185" class="heading" text-anchor="middle">Основной поток</text>
+<rect x="380" y="635" width="1500" height="375" rx="5" fill="#FFF7ED" stroke="#FB923C" stroke-width="1.8"/>
+<text x="1130.0" y="670" class="heading" text-anchor="middle">Рабочий поток · std::jthread</text>
+<path d="M 735 288 L 670 288" class="edge"/>
+<path d="M 550 340 L 550 405" class="edge"/>
+<path d="M 430 270 L 306 270" class="edge" marker-start="url(#arrow)"/>
+<path d="M 430 320 L 355 320 L 355 525 L 306 525" class="edge" marker-start="url(#arrow)"/>
+<path d="M 565 500 L 565 715" class="edge"/>
+<path d="M 690 759 L 750 759" class="edge"/>
+<path d="M 1015 735 L 1100 735" class="edge"/>
+<path d="M 1100 775 L 1055 775 L 1055 805 L 1015 805" class="edge"/>
+<path d="M 1015 780 L 1040 780 L 1040 905 L 1100 905" class="edge"/>
+<path id="spectrum-result" d="M 1100 935 L 950 935 L 950 825" class="edge"/>
+<path id="processor-results" d="M 800 825 L 800 870 L 620 870 L 620 803" class="edge"/>
+<path id="worker-publish" d="M 500 803 L 500 985 L 1495 985 L 1495 900 L 1540 900" class="edge"/>
+<path d="M 1680 840 L 1680 585 L 1390 585 L 1390 340" class="edge"/>
+<path d="M 1515 287 L 1590 287" class="edge"/>
+<path d="M 1270 285 L 980 285" class="edge control"/>
+<g id="sync-loop"><rect x="58" y="220" width="248" height="150" fill="#FFFFFF" stroke="#39364F" stroke-width="2" filter="url(#shadow)"/>
+<text x="182.0" y="262.0" class="name" text-anchor="middle">Синхромаркер</text>
+<text x="182.0" y="289.0" class="body" text-anchor="middle">OUTPUT 1</text>
+<text x="182.0" y="316.0" class="body" text-anchor="middle">↓ кабель ↓</text>
+<text x="182.0" y="343.0" class="body" text-anchor="middle">INPUT 1</text>
+</g>
+<g id="acoustic-path"><rect x="58" y="425" width="248" height="255" fill="#FFFFFF" stroke="#39364F" stroke-width="2" filter="url(#shadow)"/>
+<text x="182.0" y="492.5" class="name" text-anchor="middle">Акустический путь</text>
+<text x="182.0" y="519.5" class="body" text-anchor="middle">OUTPUT 2 → динамик</text>
+<text x="182.0" y="546.5" class="body" text-anchor="middle">↓</text>
+<text x="182.0" y="573.5" class="body" text-anchor="middle">Бокал + прямой звук</text>
+<text x="182.0" y="600.5" class="body" text-anchor="middle">↓ микрофон ↓</text>
+<text x="182.0" y="627.5" class="body" text-anchor="middle">INPUT 2</text>
+</g>
+<g id="device"><rect x="430" y="235" width="240" height="105" fill="#FFFFFF" stroke="#39364F" stroke-width="2" filter="url(#shadow)"/>
+<text x="550.0" y="281.5" class="name" text-anchor="middle">AudioDevice</text>
+<text x="550.0" y="308.5" class="body" text-anchor="middle">callback()</text>
+</g>
+<g id="generator"><rect x="735" y="235" width="245" height="105" fill="#FFFFFF" stroke="#39364F" stroke-width="2" filter="url(#shadow)"/>
+<text x="857.5" y="281.5" class="name" text-anchor="middle">ChirpGenerator</text>
+<text x="857.5" y="308.5" class="body" text-anchor="middle">Маркер + возбуждение</text>
+</g>
+<g id="ring"><rect x="430" y="405" width="270" height="95" fill="#FFFFFF" stroke="#39364F" stroke-width="2" filter="url(#shadow)"/>
+<text x="565.0" y="446.5" class="name" text-anchor="middle">SpscRing</text>
+<text x="565.0" y="473.5" class="body" text-anchor="middle">131072 входных кадра</text>
+</g>
+<g id="main"><rect x="1270" y="235" width="245" height="105" fill="#FFFFFF" stroke="#39364F" stroke-width="2" filter="url(#shadow)"/>
+<text x="1392.5" y="281.5" class="name" text-anchor="middle">main()</text>
+<text x="1392.5" y="308.5" class="body" text-anchor="middle">Клавиатура и управление</text>
+</g>
+<g id="view"><rect x="1590" y="235" width="240" height="125" fill="#FFFFFF" stroke="#39364F" stroke-width="2" filter="url(#shadow)"/>
+<text x="1710.0" y="278.0" class="name" text-anchor="middle">Spectrogram</text>
+<text x="1710.0" y="305.0" class="body" text-anchor="middle">SDL3</text>
+<text x="1710.0" y="332.0" class="body" text-anchor="middle">Накопление и показ</text>
+</g>
+<g id="worker"><rect x="430" y="715" width="260" height="88" fill="#FFFFFF" stroke="#39364F" stroke-width="2" filter="url(#shadow)"/>
+<text x="560.0" y="766.5" class="name" text-anchor="middle">ProcessingWorker</text>
+</g>
+<g id="processor"><rect x="750" y="715" width="265" height="110" fill="#FFFFFF" stroke="#39364F" stroke-width="2" filter="url(#shadow)"/>
+<text x="882.5" y="750.5" class="name" text-anchor="middle">CycleProcessor</text>
+<text x="882.5" y="777.5" class="body" text-anchor="middle">Накопление</text>
+<text x="882.5" y="804.5" class="body" text-anchor="middle">полного цикла</text>
+</g>
+<g id="sync"><rect x="1100" y="700" width="250" height="112" fill="#FFFFFF" stroke="#39364F" stroke-width="2" filter="url(#shadow)"/>
+<text x="1225.0" y="736.5" class="name" text-anchor="middle">SyncDetector</text>
+<text x="1225.0" y="763.5" class="body" text-anchor="middle">INPUT 1 · канал 0</text>
+<text x="1225.0" y="790.5" class="body" text-anchor="middle">Поиск маркера</text>
+</g>
+<g id="spectrum"><rect x="1100" y="850" width="280" height="110" fill="#FFFFFF" stroke="#39364F" stroke-width="2" filter="url(#shadow)"/>
+<text x="1240.0" y="885.5" class="name" text-anchor="middle">SpectrumAnalyzer</text>
+<text x="1240.0" y="912.5" class="body" text-anchor="middle">FFTW3</text>
+<text x="1240.0" y="939.5" class="body" text-anchor="middle">INPUT 2 · канал 1</text>
+</g>
+<g id="ready"><rect x="1540" y="840" width="280" height="120" fill="#FFFFFF" stroke="#39364F" stroke-width="2" filter="url(#shadow)"/>
+<text x="1680.0" y="880.5" class="name" text-anchor="middle">Очередь ready_</text>
+<text x="1680.0" y="907.5" class="body" text-anchor="middle">До 8 SpectrumFrame</text>
+<text x="1680.0" y="934.5" class="body" text-anchor="middle">Мьютекс</text>
+</g>
+<text x="705" y="220" class="edge-label" text-anchor="middle">nextSample() → StereoSample</text>
+<text x="660" y="378" class="edge-label" text-anchor="middle">push(InputFrame)</text>
+<text x="695" y="563" class="edge-label" text-anchor="middle">readInput() → pop()</text>
+<text x="695" y="590" class="small" text-anchor="middle">Кольцо принадлежит AudioDevice</text>
+<text x="720" y="695" class="edge-label" text-anchor="middle">append(InputFrame)</text>
+<text x="1055" y="691" class="edge-label" text-anchor="middle">detect()</text>
+<text x="1010" y="843" class="edge-label" text-anchor="middle">SyncMarker</text>
+<text x="1040" y="884" class="edge-label" text-anchor="end">analyze()</text>
+<text x="1025" y="960" class="edge-label" text-anchor="middle">SpectrumFrame</text>
+<text x="745" y="897" class="edge-label" text-anchor="middle">Готовые кадры</text>
+<text x="925" y="978" class="edge-label" text-anchor="middle">ProcessingWorker: ready_.push_back() под мьютексом</text>
+<text x="1540" y="560" class="edge-label" text-anchor="middle">take(): готовые SpectrumFrame</text>
+<text x="1555" y="220" class="edge-label" text-anchor="middle">add(), draw()</text>
+<text x="1125" y="250" class="edge-label" text-anchor="middle">Настройки</text>
+<text x="1125" y="315" class="small" text-anchor="middle">через AudioDevice</text>
+<text x="40" y="1050" class="small" text-anchor="start">Сплошные стрелки — данные и результаты; пунктир — настройки. В кольце — все 4 входных канала, анализ использует первые два.</text>
+</svg>

@@ -1,3 +1,7 @@
+/**
+ * @file audio.cpp
+ * @brief Открытие звукового устройства и callback PortAudio.
+ */
 #include "acoustic_radar/audio.hpp"
 
 #include <algorithm>
@@ -8,14 +12,28 @@ namespace acoustic_radar {
 
 namespace {
 
+/**
+ * @brief Преобразует ошибку PortAudio в исключение.
+ *
+ * @param error Код возврата PortAudio.
+ * @throws std::runtime_error error отличается от paNoError.
+ */
 void check(PaError error)
 {
     if (error != paNoError)
         throw std::runtime_error(Pa_GetErrorText(error));
 }
 
-// Выбираем физическое ALSA-устройство с нужным числом каналов,
-// а не системное устройство по умолчанию, которое может менять маршрутизацию.
+/**
+ * @brief Выбираем физическое ALSA-устройство с нужным числом каналов, а не системное устройство по
+ * умолчанию, которое может менять маршрутизацию.
+ */
+/**
+ * @brief Находит ALSA-устройство UR22C с четырьмя входами и двумя выходами.
+ *
+ * @return Индекс подходящего устройства PortAudio.
+ * @throws std::runtime_error Устройство не найдено или перечисление устройств завершилось ошибкой.
+ */
 PaDeviceIndex findUR22C()
 {
     const int count = Pa_GetDeviceCount();
@@ -112,9 +130,12 @@ void AudioDevice::stop()
         check(Pa_StopStream(stream_));
 }
 
-// Обработчик PortAudio копирует вход в кольцо и генерирует выходной звук.
-// При передаче данных он не ждёт рабочий поток и не захватывает мьютексы.
-// FFT, корреляция, SDL и файловые операции выполняются в других потоках.
+/**
+ * @brief Обработчик PortAudio копирует вход в кольцо и генерирует выходной звук.
+ *
+ * При передаче данных он не ждёт рабочий поток и не захватывает мьютексы.
+ * FFT, корреляция, SDL и файловые операции выполняются в других потоках.
+ */
 int AudioDevice::callback(
     const void* input,
     void* output,

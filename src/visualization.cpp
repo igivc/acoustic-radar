@@ -1,3 +1,7 @@
+/**
+ * @file visualization.cpp
+ * @brief Отрисовка частотных ячеек и затухание истории спектрограммы.
+ */
 #include "acoustic_radar/visualization.hpp"
 #include "acoustic_radar/chirp.hpp"
 #include <algorithm>
@@ -6,13 +10,20 @@
 #include <stdexcept>
 namespace acoustic_radar {
 namespace {
-// Координаты накопления независимы от размера окна: при изменении окна
-// масштабируется готовая текстура, а не пересчитываются исходные FFT-спектры.
+/**
+ * @brief Координаты накопления независимы от размера окна: при изменении окна масштабируется готовая
+ * текстура, а не пересчитываются исходные FFT-спектры.
+ */
 constexpr int Width = 1100, Height = 540;
 constexpr double CycleSeconds = ChirpGenerator::CycleDuration;
 constexpr int CycleMs = static_cast<int>(CycleSeconds * 1000);
-// SDL3 возвращает bool; превращаем ошибки проверяемых операций в исключение,
-// которое перехватывает main и после этого освобождает графические ресурсы.
+/**
+ * @brief SDL3 возвращает bool; превращаем ошибки проверяемых операций в исключение, которое
+ * перехватывает main и после этого освобождает графические ресурсы.
+ *
+ * @param ok Результат проверяемой операции SDL.
+ * @throws std::runtime_error Ошибка SDL при ok=false.
+ */
 void check(bool ok) { if (!ok) throw std::runtime_error(SDL_GetError()); }
 }
 Spectrogram::Spectrogram(SDL_Renderer* renderer): renderer_(renderer) {
@@ -27,7 +38,7 @@ Spectrogram::Spectrogram(SDL_Renderer* renderer): renderer_(renderer) {
 }
 Spectrogram::~Spectrogram() { SDL_DestroyTexture(accumulation_); }
 void Spectrogram::clear() {
-    // Цель отрисовки — текстура, не окно. SDL_RenderClear заполняет её целиком;
+    // Цель отрисовки - текстура, не окно. SDL_RenderClear заполняет её целиком;
     // nullptr затем возвращает цель к стандартному оконному буферу.
     check(SDL_SetRenderTarget(renderer_, accumulation_));
     SDL_SetRenderDrawColor(renderer_, 0, 0, 0, 255);
@@ -70,13 +81,13 @@ void Spectrogram::add(const SpectrumFrame& frame) {
             // Нормированная координата частоты: 0 на нижней границе, 1 на верхней.
             // Это одновременно параметр палитры и положение по вертикали.
             const float frequencyPosition = (frequency - lowHz_) / 1000.f;
-            // Частота задаёт оттенок: красный → жёлтый → зелёный → голубой → синий.
+            // Частота задаёт оттенок: красный -> жёлтый -> зелёный -> голубой -> синий.
             // Четыре линейных участка соответствуют оттенкам HSV от 0° до 240°.
             // Линейно переводим уже логарифмический уровень dBFS в [0,1]:
-            // -80 и ниже → непрозрачность 0, -15 и выше → непрозрачность 1.
+            // -80 и ниже -> непрозрачность 0, -15 и выше -> непрозрачность 1.
             // Это фиксированный визуальный масштаб, не автоматическая регулировка.
             // std::clamp не заменяет NaN конечным числом: конечность уровня пока предполагается;
-            // преобразование NaN в Uint8 ниже вызывает UB — это известная ошибка.
+            // преобразование NaN в Uint8 ниже вызывает UB - это известная ошибка.
             const float brightness = std::clamp((column.decibels[bin] + 80.f) / 65.f, 0.f, 1.f);
             if (brightness <= 0) continue;
             // hue=0: красный (1,0,0); 1: жёлтый (1,1,0);
@@ -86,7 +97,7 @@ void Spectrogram::add(const SpectrumFrame& frame) {
             const float red = std::clamp(2.f - hue, 0.f, 1.f);
             const float green = std::clamp(std::min(hue, 4.f - hue), 0.f, 1.f);
             const float blue = std::clamp(hue - 2.f, 0.f, 1.f);
-            // Частота задаёт цвет, уровень — непрозрачность. Обычное смешивание
+            // Частота задаёт цвет, уровень - непрозрачность. Обычное смешивание
             // сохраняет оттенок при накоплении. Простое сложение цветов могло бы
             // превратить красные и зелёные участки в белые.
             SDL_SetRenderDrawColor(renderer_, Uint8(255 * red),
@@ -113,7 +124,9 @@ void Spectrogram::add(const SpectrumFrame& frame) {
     ++cycles_;
     correlation_ = frame.correlation;
 }
-// Только вывод накопления и подписей: эта функция не изменяет историю.
+/**
+ * @brief Только вывод накопления и подписей: эта функция не изменяет историю.
+ */
 void Spectrogram::draw(int durationMs) {
     // Размер поверхности вывода может отличаться от логического размера окна
     // на экранах с высокой плотностью пикселей; используем размер renderer.
@@ -125,10 +138,15 @@ void Spectrogram::draw(int durationMs) {
     // хотя бы 1×1 не допускает отрицательную область при очень маленьком окне.
     const SDL_FRect plot{80, 65, float(std::max(1, w - 115)), float(std::max(1, h - 145))};
     check(SDL_RenderTexture(renderer_, accumulation_, nullptr, &plot));
-    SDL_SetRenderDrawColor(renderer_, 100, 110, 125, 255);
+    // Сетка рисуется поверх готовой текстуры и не накапливается в истории.
+    // Полупрозрачные линии оставляют видимыми спектральные следы под ними.
+    check(SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_BLEND));
     // Метки времени каждые 100 мс; координаты масштабируются вместе с графиком.
     for (int t = 0; t <= CycleMs; t += 100) {
         float x = plot.x + plot.w * t / CycleMs;
+        SDL_SetRenderDrawColor(renderer_, 80, 100, 125, 100);
+        check(SDL_RenderLine(renderer_, x, plot.y, x, plot.y + plot.h));
+        SDL_SetRenderDrawColor(renderer_, 100, 110, 125, 255);
         SDL_RenderLine(renderer_, x, plot.y + plot.h, x, plot.y + plot.h + 5);
         char text[32]; std::snprintf(text, sizeof(text), "%d ms", t);
         SDL_RenderDebugText(renderer_, x - 15, plot.y + plot.h + 12, text);
@@ -136,9 +154,13 @@ void Spectrogram::draw(int durationMs) {
     // Метки частот каждые 200 Гц отсчитываются от текущей нижней границы.
     for (int f = 0; f <= 1000; f += 200) {
         float y = plot.y + plot.h * (1 - f / 1000.f);
+        SDL_SetRenderDrawColor(renderer_, 80, 100, 125, 100);
+        check(SDL_RenderLine(renderer_, plot.x, y, plot.x + plot.w, y));
+        SDL_SetRenderDrawColor(renderer_, 100, 110, 125, 255);
         char text[32]; std::snprintf(text, sizeof(text), "%d Hz", lowHz_ + f);
         SDL_RenderDebugText(renderer_, 8, y - 4, text);
     }
+    check(SDL_SetRenderDrawBlendMode(renderer_, SDL_BLENDMODE_NONE));
     // Линия отражает запрошенную в интерфейсе длительность, не измеренную границу эха.
     // Текущий интерфейс передаёт новое значение сразу, а генератор принимает его
     // на границе цикла: во время перестройки линия может опережать данные кадра.
@@ -147,7 +169,7 @@ void Spectrogram::draw(int durationMs) {
     char status[192];
     std::snprintf(status, sizeof(status), "INPUT 2 | FFT %zu / hop %zu | cycles: %u | sync: %.3f | brightness: -80..-15 dBFS", SpectrumAnalyzer::FFTSize, SpectrumAnalyzer::HopSize, cycles_, correlation_);
     SDL_RenderDebugText(renderer_, 80, 20, status);
-    SDL_RenderDebugText(renderer_, 80, float(h - 35), "UP/DOWN: frequency | LEFT/RIGHT: duration | ESC: exit | vertical line: excitation end");
+    SDL_RenderDebugText(renderer_, 80, float(h - 35), "UP/DOWN: frequency | LEFT/RIGHT: duration | F11: fullscreen | ESC: exit | vertical line: excitation end");
     // Выводим собранный оконный кадр. Сама история остаётся в accumulation_,
     // поэтому очистка оконного буфера в следующем draw() её не уничтожает.
     check(SDL_RenderPresent(renderer_));

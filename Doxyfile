@@ -1,0 +1,26 @@
+# Запускать из корня проекта: doxygen Doxyfile
+DOXYFILE_ENCODING      = UTF-8
+PROJECT_NAME           = "Acoustic Radar"
+PROJECT_BRIEF          = "Генерация chirp, синхронизация и визуализация акустического отклика"
+OUTPUT_DIRECTORY       = build/doxygen
+OUTPUT_LANGUAGE        = Russian
+INPUT_ENCODING         = UTF-8
+INPUT                  = include src tests docs/API.md
+FILE_PATTERNS          = *.hpp *.cpp *.md
+RECURSIVE              = YES
+USE_MDFILE_AS_MAINPAGE  = docs/API.md
+EXTRACT_ALL            = NO
+EXTRACT_PRIVATE        = YES
+EXTRACT_STATIC         = YES
+EXTRACT_ANON_NSPACES    = YES
+FULL_PATH_NAMES        = NO
+BUILTIN_STL_SUPPORT    = YES
+SOURCE_BROWSER         = YES
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+HAVE_DOT               = NO
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+WARN_AS_ERROR          = YES

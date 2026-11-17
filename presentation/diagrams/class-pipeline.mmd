@@ -1,0 +1,53 @@
+%% Редактируемый исходник: вставьте в Mermaid Live Editor без ограждения ```.
+%% SVG рядом использует ту же структуру, но позиции в нём заданы для слайда 16:9.
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Arial, sans-serif","fontSize":"18px","primaryColor":"#FFFFFF","primaryBorderColor":"#39364F","primaryTextColor":"#28253D","lineColor":"#39364F","edgeLabelBackground":"#FFFFFF","clusterBkg":"#F9F9FB","clusterBorder":"#BDBCCC"},"flowchart":{"curve":"linear","nodeSpacing":30,"rankSpacing":55,"htmlLabels":true}}}%%
+flowchart TB
+    subgraph TOP[" "]
+        direction LR
+        subgraph HW["Оборудование"]
+            direction TB
+            loop["OUTPUT 1 → кабель → INPUT 1<br/>Синхромаркер"]
+            acoustic["OUTPUT 2 → динамик → бокал<br/>Отклик + прямой звук → микрофон<br/>Микрофон → INPUT 2"]
+        end
+        subgraph AUDIO["Аудиопоток · PortAudio"]
+            direction TB
+            generator["ChirpGenerator<br/>Маркер + возбуждение"]
+            device["AudioDevice<br/>callback()"]
+            ring["SpscRing&lt;InputFrame, 131072&gt;<br/>Общий входной буфер AudioDevice"]
+            generator -->|"StereoSample: left + right"| device
+            device -->|"push(InputFrame)"| ring
+        end
+        subgraph UI["Основной поток"]
+            direction LR
+            main["main()<br/>Клавиатура и управление"]
+            view["Spectrogram + SDL3<br/>Накопление и показ"]
+            main -->|"add(), draw()"| view
+        end
+    end
+    subgraph WORK["Рабочий поток · std::jthread"]
+        direction LR
+        worker["ProcessingWorker"]
+        processor["CycleProcessor<br/>Накопление полного цикла"]
+        sync["SyncDetector<br/>INPUT 1 · канал 0<br/>Поиск маркера"]
+        spectrum["SpectrumAnalyzer + FFTW3<br/>INPUT 2 · канал 1<br/>Вычисление спектра"]
+        ready["Очередь ready_<br/>Внутри ProcessingWorker<br/>До 8 SpectrumFrame · мьютекс"]
+        worker -->|"append(InputFrame)"| processor
+        processor -->|"detect()"| sync
+        sync -->|"SyncMarker"| processor
+        processor -->|"analyze()"| spectrum
+        spectrum -->|"SpectrumFrame"| processor
+        processor -->|"Готовые кадры"| worker
+        worker -->|"ready_.push_back() под мьютексом"| ready
+    end
+    device <-->|"OUTPUT 1 / INPUT 1"| loop
+    device <-->|"OUTPUT 2 / INPUT 2"| acoustic
+    ring -->|"readInput() → pop()"| worker
+    ready -->|"take(): SpectrumFrame"| main
+    main -.->|"Через AudioDevice.setAcousticParameters()"| generator
+    style TOP fill:transparent,stroke:transparent
+    style HW fill:#FDF4FF,stroke:#E879F9,color:#28253D
+    style AUDIO fill:#F0FDFA,stroke:#2DD4BF,color:#28253D
+    style UI fill:#F0F9FF,stroke:#38BDF8,color:#28253D
+    style WORK fill:#FFF7ED,stroke:#FB923C,color:#28253D
+    classDef box fill:#FFFFFF,stroke:#39364F,stroke-width:2px,color:#28253D
+    class loop,acoustic,generator,device,ring,main,view,worker,processor,sync,spectrum,ready box

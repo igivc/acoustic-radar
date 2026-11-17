@@ -1,3 +1,7 @@
+/**
+ * @file processing.cpp
+ * @brief Накопление входа, обработка циклов и передача результатов.
+ */
 #include "acoustic_radar/processing.hpp"
 #include "acoustic_radar/sync.hpp"
 #include <chrono>
@@ -13,7 +17,7 @@ std::vector<SpectrumFrame> CycleProcessor::append(const InputFrame& frame) {
     if (!initialized_ || frame.index != nextIndex_) {
         samples_.clear(); pendingMarker_.reset(); base_ = frame.index; initialized_ = true;
     }
-    // Сохраняем все четыре канала: детектор использует первый, FFT — второй.
+    // Сохраняем все четыре канала: детектор использует первый, FFT - второй.
     // Выделения памяти здесь допустимы: append работает вне callback PortAudio.
     nextIndex_ = frame.index + 1;
     samples_.insert(samples_.end(), frame.samples.begin(), frame.samples.end());
@@ -107,8 +111,11 @@ ProcessingWorker::ProcessingWorker(AudioDevice& audio)
     // Поток уже запущен инициализатором thread_; дополнительных действий нет.
 }
 
-// Сначала ждём завершения рабочего потока, затем освобождаем его данные.
-// AudioDevice уничтожается позже worker, поэтому остаётся доступным до конца чтения.
+/**
+ * @brief Сначала ждём завершения рабочего потока, затем освобождаем его данные.
+ *
+ * AudioDevice уничтожается позже worker, поэтому остаётся доступным до конца чтения.
+ */
 ProcessingWorker::~ProcessingWorker() {
     // Не удерживаем mutex_ во время join: завершающийся поток может нуждаться
     // в нём, чтобы записать результат или ошибку. request_stop не прерывает
